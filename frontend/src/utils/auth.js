@@ -11,7 +11,6 @@ export function parseToken (token) {
   }
 
   const data = JSON.parse(Base64.decode(parts[1]))
-
   localStorage.setItem('jwt', token)
   store.commit('setJWT', token)
   store.commit('setUser', data.user)
@@ -27,15 +26,34 @@ export async function validateLogin () {
   }
 }
 
-export async function login (username, password, recaptcha) {
-  const data = { username, password, recaptcha }
+export async function login (redirect) {
 
-  const res = await fetch(`${baseURL}/api/login`, {
-    method: 'POST',
+  const res = await fetch(`${baseURL}/threebot/login/url?callback=/login&reirect=${redirect}`, {
+    method: 'GET',
     headers: {
       'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(data)
+    }
+  })
+
+  const body = await res.text()
+
+  if (res.status === 200) {
+    window.location.href = body
+  } else {
+    throw new Error(body)
+  }
+}
+
+export async function threebotLogin (params) {
+  params = Object.keys(params).map((key) => {
+    return encodeURIComponent(key) + '=' + encodeURIComponent(params[key])
+  }).join('&');
+
+  const res = await fetch(`${baseURL}/threebot/callback?${params}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json'
+    }
   })
 
   const body = await res.text()

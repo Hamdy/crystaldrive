@@ -1,25 +1,21 @@
-<template>
+<template *ngIf="this.$route.query.signedAttempt">
   <div id="login" :class="{ recaptcha: recaptcha }">
     <form @submit="submit">
       <img :src="logoURL" alt="File Browser">
       <h1>{{ name }}</h1>
       <div v-if="error !== ''" class="wrong">{{ error }}</div>
 
-      <input class="input input--block" type="text" v-model="username" :placeholder="$t('login.username')">
-      <input class="input input--block" type="password" v-model="password" :placeholder="$t('login.password')">
-      <input class="input input--block" v-if="createMode" type="password" v-model="passwordConfirm" :placeholder="$t('login.passwordConfirm')" />
+      <input class="button button--block" type="submit" value="Login/Signup with 3bot">
 
-      <div v-if="recaptcha" id="recaptcha"></div>
-      <input class="button button--block" type="submit" :value="createMode ? $t('login.signup') : $t('login.submit')">
-
-      <p @click="toggleMode" v-if="signup">{{ createMode ? $t('login.loginInstead') : $t('login.createAnAccount') }}</p>
     </form>
   </div>
 </template>
 
 <script>
 import * as auth from '@/utils/auth'
-import { name, logoURL, recaptcha, recaptchaKey, signup } from '@/utils/constants'
+import { name, logoURL, recaptcha, signup } from '@/utils/constants'
+
+
 
 export default {
   name: 'login',
@@ -38,12 +34,25 @@ export default {
       passwordConfirm: ''
     }
   },
-  mounted () {
-    if (!recaptcha) return
+  async mounted () {
+    let redirect = this.$route.query.redirect
+    
+    if (redirect === '' || redirect === undefined || redirect === null) {
+          redirect = '/files/'
+    }
 
-    window.grecaptcha.render('recaptcha', {
-      sitekey: recaptchaKey
-    })
+    let signedAttempt = this.$route.query.signedAttempt
+    
+    // means coming back from 3botlogin,we need to validate coming query params
+    // get token for user and set token
+    if (signedAttempt){
+      try{
+        await auth.threebotLogin(this.$route.query)
+        window.location.href = redirect
+      }catch (e){
+          this.error = e
+      }
+    }
   },
   methods: {
     toggleMode () {
@@ -79,15 +88,9 @@ export default {
         if (this.createMode) {
           await auth.signup(this.username, this.password)
         }
-
-        await auth.login(this.username, this.password, captcha)
-        this.$router.push({ path: redirect })
+        await auth.login(redirect)
       } catch (e) {
-        if (e.message == 409) {
-          this.error = this.$t('login.usernameTaken')
-        } else {
-          this.error = this.$t('login.wrongCredentials')
-        }
+          this.error = "Error redirecting user to 3bot login"
       }
     }
   }

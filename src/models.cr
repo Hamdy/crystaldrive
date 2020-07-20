@@ -1,7 +1,7 @@
 require "json"
 require "time"
 
-class Fileman::FileCheckSum
+class CrystalDrive::FileCheckSum
     include JSON::Serializable
 
     property md5 : String = ""
@@ -12,7 +12,7 @@ class Fileman::FileCheckSum
     def initialize; end
 end
 
-class Fileman::Item
+class CrystalDrive::Item
 
     include JSON::Serializable
     property size : UInt64 = 0_u64
@@ -39,7 +39,7 @@ class Fileman::Item
 
 end
 
-class Fileman::DirList
+class CrystalDrive::DirList
 
     include JSON::Serializable
 
@@ -56,7 +56,7 @@ class Fileman::DirList
     @[JSON::Field(key: "type")]
     property itemType : String = ""
 
-    property items : Array(Fileman::Item) = Array(Fileman::Item).new
+    property items : Array(CrystalDrive::Item) = Array(CrystalDrive::Item).new
 
     @[JSON::Field(key: "numDirs")]
     property num_dirs : UInt64 = 0_u64
@@ -64,12 +64,12 @@ class Fileman::DirList
     @[JSON::Field(key: "numFiles")]
     property num_files : UInt64 = 0_u64
 
-    property sorting : Fileman::SortingPrefernces = Fileman::SortingPrefernces.new
+    property sorting : CrystalDrive::SortingPrefernces = CrystalDrive::SortingPrefernces.new
 
     def initialize; end
 end
 
-class Fileman::SortingPrefernces
+class CrystalDrive::SortingPrefernces
 
     include JSON::Serializable
 
@@ -79,7 +79,7 @@ class Fileman::SortingPrefernces
     def initialize; end
 end
 
-class Fileman::Permissions
+class CrystalDrive::Permissions
     include JSON::Serializable
 
     property admin : Bool = false
@@ -94,7 +94,7 @@ class Fileman::Permissions
     def initialize; end
 end
 
-class Fileman::User
+class CrystalDrive::User
 
     include JSON::Serializable
 
@@ -106,9 +106,9 @@ class Fileman::User
     property viewMode : String = ""
     property lockPassword : Bool = false
     property commands : Array(String) = Array(String).new
-    property sorting : Fileman::SortingPrefernces = Fileman::SortingPrefernces.new
+    property sorting : CrystalDrive::SortingPrefernces = CrystalDrive::SortingPrefernces.new
     property rules : Array(String) = Array(String).new
-    property perm : Fileman::Permissions = Fileman::Permissions.new
+    property perm : CrystalDrive::Permissions = CrystalDrive::Permissions.new
 
     def initialize; end
 end

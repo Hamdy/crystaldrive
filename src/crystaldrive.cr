@@ -1,8 +1,16 @@
 require "uri"
 require "kemal"
+require "kemal-session"
+require "kemal-session-bcdb"
 require "zip"
+require "./init"
+
 require "./backend"
 require "crystalstore"
+require "./auth"
+
+include CrystalDrive::Init
+
 
 HOME = File.read("public/static/index.html").
   gsub("[{[ .StaticURL ]}]", "/static").
@@ -18,15 +26,14 @@ HOME = File.read("public/static/index.html").
     "BaseURL": "",
     "CSS": false,
     "DisableExternal": false,
-    "LoginPage": false,
+    "LoginPage": true,
     "Name": "",
     "NoAuth": true,
     "ReCaptcha": false,
-    "Signup": false,
+    "Signup": true,
     "StaticURL": "/static",
     "Version": "(untracked)"}`))
 
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoxLCJsb2NhbGUiOiJlbiIsInZpZXdNb2RlIjoibW9zYWljIiwicGVybSI6eyJhZG1pbiI6dHJ1ZSwiZXhlY3V0ZSI6dHJ1ZSwiY3JlYXRlIjp0cnVlLCJyZW5hbWUiOnRydWUsIm1vZGlmeSI6dHJ1ZSwiZGVsZXRlIjp0cnVlLCJzaGFyZSI6ZmFsc2UsImRvd25sb2FkIjp0cnVlfSwiY29tbWFuZHMiOltdLCJsb2NrUGFzc3dvcmQiOmZhbHNlfSwiZXhwIjoxNTY2OTEyNzc2MzMsImlhdCI6MTU2NjkwNTU3NiwiaXNzIjoiRmlsZSBCcm93c2VyIn0.GaBiL_MeqDev0695MRqE3RhmGatouIT4BtlvpTI4P1A"
 
 private def zip_files(files : Array(String))
   path = ""
@@ -34,8 +41,8 @@ private def zip_files(files : Array(String))
       path = file.path
     Zip::Writer.open(file) do |zip|
       files.each do |file|
-        stats = Fileman::Backend.file_stats(file)
-        f = Fileman::Backend.file_open(file, 755)
+        stats = CrystalDrive::Backend.file_stats(file)
+        f = CrystalDrive::Backend.file_open(file, 755)
         s = Bytes.new(stats.size)
         f.read s
         data = String.new s
@@ -52,7 +59,7 @@ private def list_files(files : Array(String), all_files : Array(String) = Array(
   files.each do |path|
       path = URI.decode(path)
       begin
-        list = Fileman::Backend.list(path)
+        list = CrystalDrive::Backend.list(path)
         files = [] of String
         dirs = [] of String
         
@@ -85,17 +92,46 @@ get "/files/*" do |env|
   HOME
 end
 
+# Home
+get "/login/callback/*" do |env|
+  env.response.content_type = "text/html"
+  HOME
+end
+
+# Home
+get "/login/" do |env|
+  env.response.content_type = "text/html"
+  HOME
+end
+
 # Login
 post "/api/login" do |env|
   env.response.content_type = "cty"
-  TOKEN
+  halt env, status_code: 403, response: "403 Forbidden"
 end
 
 # Renew
 post "/api/renew" do |env|
   env.response.content_type = "cty"
-  env.response.headers["X-Renew-Token"] = "true"
-  TOKEN
+  current_token = env.session.string?("token")
+  current_user = env.session.string?("username")
+  current_email = env.session.string?("email")
+
+  if !env.request.headers.has_key?("X-Auth")
+    halt env, status_code: 403, response: "403 Forbidden"
+  end
+  provided_token = env.request.headers["X-Auth"]
+  if current_token.nil? || current_user.nil? || provided_token != current_token
+    halt env, status_code: 403, response: "403 Forbidden"
+  end
+
+  if !CrystalDrive::Token.is_valid? current_token.not_nil!, current_user, current_email
+    halt env, status_code: 403, response: "403 Forbidden"
+  end
+  
+  token = CrystalDrive::Token.generate_token(current_user, current_email, "en", "mosaic", {"admin" => true, "execute" => true, "create" => true, "rename" => true, "modify" => true, "delete" => true,  "share" => true}, false, Array(String).new)
+  env.session.string("token", token)
+  token
 end
 
 # list or stats
@@ -112,11 +148,11 @@ get "/api/resources/*" do |env|
   env.response.headers["X-Renew-Token"] =  "true"
 
   if list 
-    Fileman::Backend.list(path).to_json
+    CrystalDrive::Backend.list(path).to_json
   else
-    stats = Fileman::Backend.file_stats(path)
+    stats = CrystalDrive::Backend.file_stats(path)
     if stats.itemType == "text"
-      f = Fileman::Backend.file_open(path, 755)
+      f = CrystalDrive::Backend.file_open(path, 755)
       s = Bytes.new(stats.size)
       f.read s
       stats.content = String.new s
@@ -133,8 +169,7 @@ post "/api/resources/*" do |env|
 
   if dir.ends_with?("/")
     begin
-      pp! "here"
-      Fileman::Backend.dir_create(dir, 755, create_parents=true)
+      CrystalDrive::Backend.dir_create(dir, 755, create_parents=true)
     rescue CrystalStore::FileExistsError; 
       if ! override
         halt env, status_code: 409, response: "Already exists"
@@ -158,14 +193,14 @@ post "/api/resources/*" do |env|
     end
 
     begin
-      Fileman::Backend.file_create(file, 755, content_type, create_parents=true)
+      CrystalDrive::Backend.file_create(file, 755, content_type, create_parents=true)
     rescue CrystalStore::FileExistsError
       if !override
         halt env, status_code: 409, response: "Already exists"
       end
     end
     
-    f = Fileman::Backend.file_open file, 755
+    f = CrystalDrive::Backend.file_open file, 755
     f.set_conten_type content_type
     IO.copy(env.request.body.not_nil!, f)
     f.close
@@ -182,13 +217,13 @@ delete "/api/resources/*" do |env|
   env.response.headers["X-Content-Type-Options"] ="nosniff"
   if path.ends_with?("/")
     begin
-      Fileman::Backend.dir_delete(path)
+      CrystalDrive::Backend.dir_delete(path)
     rescue CrystalStore::FileNotFoundError
       halt env, status_code: 409, response: "Dir not found"
     end
   else
     begin
-      Fileman::Backend.file_delete(path)
+      CrystalDrive::Backend.file_delete(path)
     rescue CrystalStore::FileNotFoundError
       halt env, status_code: 409, response: "File not found"
     end
@@ -207,9 +242,9 @@ patch "/api/resources/*" do |env|
   if src.ends_with?("/")
     begin
       if action == "copy"
-        Fileman::Backend.dir_copy(src, dest)
+        CrystalDrive::Backend.dir_copy(src, dest)
       elsif action == "rename" || action == "move"
-        Fileman::Backend.dir_move(src, dest)
+        CrystalDrive::Backend.dir_move(src, dest)
       end
     rescue ex1: CrystalStore::FileNotFoundError
       halt env, status_code: 409, response: "Not found"
@@ -219,9 +254,9 @@ patch "/api/resources/*" do |env|
   else
     begin
       if action == "copy"
-        Fileman::Backend.file_copy(src, dest)
+        CrystalDrive::Backend.file_copy(src, dest)
       elsif action == "rename" || action == "move"
-        Fileman::Backend.file_move(src, dest)
+        CrystalDrive::Backend.file_move(src, dest)
       end
     rescue ex1: CrystalStore::FileNotFoundError
       halt env, status_code: 409, response: "Not found"
@@ -238,15 +273,15 @@ put "/api/resources/*" do |env|
   env.response.headers.add("X-Renew-Token", "true")
   env.response.headers.add("X-Content-Type-Options", "nosniff")
 
-  exists = Fileman::Backend.file_exists? file
+  exists = CrystalDrive::Backend.file_exists? file
 
   if ! exists
     halt env, status_code: 409, response: "not found"
   end
 
-  Fileman::Backend.file_delete(file)
-  Fileman::Backend.file_create(file, 755, "text/html")
-  f = Fileman::Backend.file_open file, 755
+  CrystalDrive::Backend.file_delete(file)
+  CrystalDrive::Backend.file_create(file, 755, "text/html")
+  f = CrystalDrive::Backend.file_open file, 755
   puts env.request.body.to_s
   IO.copy(env.request.body.not_nil!, f)
   f.close
@@ -285,7 +320,7 @@ get "/api/raw/*" do |env|
       env.response.headers.add("Location", "/api/raw/?files=" + path)
   else
       inline = env.params.query.has_key?("inline") == true
-      stats = Fileman::Backend.file_stats(path)
+      stats = CrystalDrive::Backend.file_stats(path)
       if inline
           env.response.headers["Content-Disposition"] = "inline"
           env.response.headers["Accept-Ranges"] = "bytes"
@@ -295,7 +330,7 @@ get "/api/raw/*" do |env|
       env.response.content_type = ""
       env.response.headers["X-Renew-Token"] = "true"
       
-      f = Fileman::Backend.file_open(path, 755)
+      f = CrystalDrive::Backend.file_open(path, 755)
       s = Bytes.new(stats.size)
       f.read s
       f.close
@@ -305,12 +340,13 @@ end
 
 get "/api/preview/thumb/*" do |env|
   path = URI.decode(env.request.path.gsub("/api/preview/thumb", ""))
-  f = Fileman::Backend.file_open(path, 755)
+  f = CrystalDrive::Backend.file_open(path, 755)
   s = Bytes.new(f.file.meta.not_nil!.size)
   f.read s
   f.close
   env.response.headers["Content-Type"] = f.content_type
   env.response.headers["Content-Disposition"] = "inline"
+  env.response.headers["X-Renew-Token"] = "true"
   env.response.content_length = f.file.meta.not_nil!.size
   
   send_file  env, s, filename: f.filename, disposition: "inline"
@@ -318,50 +354,18 @@ end
 
 get "/api/preview/big/*" do |env|
   path = URI.decode(env.request.path.gsub("/api/preview/big", ""))
-  f = Fileman::Backend.file_open(path, 755)
+  f = CrystalDrive::Backend.file_open(path, 755)
   s = Bytes.new(f.file.meta.not_nil!.size)
   f.read s
   f.close
   env.response.headers["Content-Type"] = f.content_type
   env.response.headers["Content-Disposition"] = "inline"
+  env.response.headers["X-Renew-Token"] = "true"
   env.response.content_length = f.file.meta.not_nil!.size
   
   send_file  env, s, filename: f.filename, disposition: "inline"
 end
 
-# workaround until kemal really supports 0.35
-class HTTP::Server::Response
-  class Output
-    # original definition since Crystal 0.35.0
-    def close
-      return if closed?
 
-      unless response.wrote_headers?
-        response.content_length = @out_count
-      end
-
-      ensure_headers_written
-
-      super
-
-      if @chunked
-        @io << "0\r\n\r\n"
-        @io.flush
-      end
-    end
-
-    # patch from https://github.com/kemalcr/kemal/pull/576
-    def close
-      # ameba:disable Style/NegatedConditionsInUnless
-      unless response.wrote_headers? && !response.headers.has_key?("Content-Range")
-        response.content_length = @out_count
-      end
-
-      ensure_headers_written
-
-      previous_def
-    end
-  end
-end
 
 Kemal.run

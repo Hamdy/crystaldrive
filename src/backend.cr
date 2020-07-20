@@ -1,7 +1,7 @@
 require "crystalstore"
 require "./models"
 
-class Fileman::Backend
+class CrystalDrive::Backend
     STORE = CrystalStore::Store.new
 
     private def self.is_file(path : String)
@@ -9,7 +9,7 @@ class Fileman::Backend
     end
 
     private def self.get_sorting_pref_for_user(id : String)
-        return Fileman::SortingPrefernces.new
+        return CrystalDrive::SortingPrefernces.new
     end
 
     private def self.get_content_type (http_content_type : String)
@@ -69,7 +69,7 @@ class Fileman::Backend
         file_meta = file_meta.not_nil!
 
         basename = Path.new("/", path).basename
-        item = Fileman::Item.new
+        item = CrystalDrive::Item.new
         item.name = file_meta.not_nil!.name.not_nil!
         item.size = file_meta.not_nil!.size
         item.path = path
@@ -87,7 +87,7 @@ class Fileman::Backend
         files = list.files
         dirs = list.dirs
 
-        result = Fileman::DirList.new
+        result = CrystalDrive::DirList.new
         result.size = list.size
         result.modified = Time.unix(list.last_modified).to_s("%Y-%m-%dT%H:%M:%S")
         result.mode = list.mode.to_i64
@@ -98,7 +98,7 @@ class Fileman::Backend
         result.sorting = get_sorting_pref_for_user ""
 
         files.each do |file|
-            item = Fileman::Item.new
+            item = CrystalDrive::Item.new
             item.name = file.meta.not_nil!.name.not_nil!
             item.size = file.meta.not_nil!.size
             item.path = Path.new("/", item.name).to_s
@@ -111,7 +111,7 @@ class Fileman::Backend
         end
 
         dirs.each do |dir|
-            item = Fileman::Item.new
+            item = CrystalDrive::Item.new
             item.name = dir.meta.not_nil!.name.not_nil!
             item.size = dir.meta.not_nil!.size
             item.path = Path.new("/", item.name).to_s

@@ -16,6 +16,12 @@ dependencies:
     commit: a8c0f09b858162bd13c96663febef5527b322a32
   crystalstore:
     github: crystaluniverse/crystalstore
+  threebot:
+    github: crystaluniverse/kemal-threebot
+  kemal-session-bcdb:
+    github: crystaluniverse/kemal-session-bcdb
+  jwt:
+    github: crystal-community/jwt
 
 crystal: 0.35.0
 
