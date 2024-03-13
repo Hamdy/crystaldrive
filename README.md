@@ -1,6 +1,6 @@
 # crystaldrive
 
-A file manager that uses [Crystalstore](https://github.com/crystaluniverse/crystalstore) as a virtual file system
+A file manager that uses [Crystalstore](https://github.com/Hamdy/crystalstore) as a file system
 Crystaldrive is based on [Filebrowser](https://filebrowser.org/)
 
 ## Build ui
